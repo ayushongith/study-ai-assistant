@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { supabase } from '@/lib/db/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,7 +14,7 @@ import type { Flashcard } from '@/types'
 export const dynamic = 'force-dynamic'
 
 export default function FlashcardsPage() {
-  const { user } = useAuth()
+  const { user, supabase } = useAuth()
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)

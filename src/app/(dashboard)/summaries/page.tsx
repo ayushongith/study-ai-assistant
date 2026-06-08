@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { supabase } from '@/lib/db/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +15,7 @@ import remarkGfm from 'remark-gfm'
 export const dynamic = 'force-dynamic'
 
 export default function SummariesPage() {
-  const { user } = useAuth()
+  const { user, supabase } = useAuth()
   const [summaries, setSummaries] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [copiedId, setCopiedId] = useState<string | null>(null)

@@ -23,7 +23,7 @@ const statCards = [
 export const dynamic = 'force-dynamic'
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, supabase } = useAuth()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 

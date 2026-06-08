@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { supabase } from '@/lib/db/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +15,7 @@ import Link from 'next/link'
 export const dynamic = 'force-dynamic'
 
 export default function QuizPage() {
-  const { user } = useAuth()
+  const { user, supabase } = useAuth()
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeQuiz, setActiveQuiz] = useState<any>(null)
