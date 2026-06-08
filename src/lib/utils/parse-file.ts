@@ -114,38 +114,72 @@ function extractPdfText(buffer: Buffer): string {
     if (results.length) break
   }
 
-  // Fallback: extract text between parentheses directly from raw binary
   if (!results.length) {
-    const parens: string[] = []
-    let i = 0
-    while (i < raw.length) {
-      if (raw[i] === '(') {
-        let depth = 1
-        let j = i + 1
-        while (j < raw.length && depth > 0) {
-          if (raw[j] === '\\') { j += 2; continue }
-          if (raw[j] === '(') depth++
-          else if (raw[j] === ')') depth--
-          j++
-        }
-        const t = raw.slice(i + 1, j - 1)
-          .replace(/\\(.)/g, '$1')
-          .replace(/\\n/g, '\n')
-        if (t.trim() && t.length < 500) parens.push(t.trim())
-        i = j
-      } else {
-        i++
-      }
-    }
-    if (parens.length) results.push(parens.join('\n\n'))
+    const fallback = extractAnyText(buffer)
+    if (fallback) results.push(fallback)
   }
 
   return results.join('\n\n')
 }
 
+function extractAnyText(buffer: Buffer): string {
+  const raw = buffer.toString('binary')
+  const found: string[] = []
+
+  // Extract text between parentheses
+  let i = 0
+  while (i < raw.length) {
+    if (raw[i] === '(') {
+      let depth = 1
+      let j = i + 1
+      while (j < raw.length && depth > 0) {
+        if (raw[j] === '\\') { j += 2; continue }
+        if (raw[j] === '(') depth++
+        else if (raw[j] === ')') depth--
+        j++
+      }
+      const t = raw.slice(i + 1, j - 1)
+        .replace(/\\(.)/g, '$1')
+        .replace(/\\n/g, '\n')
+      if (t.trim() && t.length < 500) found.push(t.trim())
+      i = j
+    } else {
+      i++
+    }
+  }
+
+  // Extract text between hex brackets <...> (PDF hex strings)
+  i = 0
+  while (i < raw.length) {
+    if (raw[i] === '<' && raw[i + 1] !== '<') {
+      let j = i + 1
+      while (j < raw.length && raw[j] !== '>') j++
+      const hex = raw.slice(i + 1, j).replace(/\s/g, '')
+      try {
+        const decoded = Buffer.from(hex, 'hex').toString('utf-8')
+        if (decoded.trim()) found.push(decoded.trim())
+      } catch { }
+      i = j + 1
+    } else {
+      i++
+    }
+  }
+
+  // Filter out PDF keywords and metadata noise
+  const skipWords = new Set(['obj', 'endobj', 'stream', 'endstream', 'xref', 'trailer', 'startxref', 'R', 'BT', 'ET', 'Td', 'Tm', 'Tf', 'TJ', 'Tj', 'cm', 'w', 'J', 'j', 'M', 'd', 'ri', 'gs', 'q', 'Q', 'Do'])
+  const filtered = found.filter(t => t.length > 2 && !skipWords.has(t) && !/^[\d.\s]+$/.test(t))
+
+  // If we got text, use it; otherwise mark as empty
+  if (filtered.length > 2) {
+    return filtered.join('\n\n')
+  }
+  return ''
+}
+
 export async function parseDocument(noteId: string, fileUrl: string, fileType: string) {
   try {
     const response = await fetch(fileUrl)
+    if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`)
     const buffer = Buffer.from(await response.arrayBuffer())
     let text = ''
 
