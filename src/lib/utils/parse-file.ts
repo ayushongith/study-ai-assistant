@@ -1,7 +1,9 @@
 'use server'
 
 import { createClient } from '@supabase/supabase-js'
-import { inflateRaw } from 'zlib'
+import { inflateRaw, inflate } from 'zlib'
+import { promisify } from 'util'
+const inflateAsync = promisify(inflate)
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,7 +44,7 @@ function decodeASCII85(data: string): Buffer {
   return Buffer.from(chunks)
 }
 
-function extractPdfText(buffer: Buffer): string {
+async function extractPdfText(buffer: Buffer): Promise<string> {
   const raw = buffer.toString('binary')
   const results: string[] = []
 
@@ -81,7 +83,11 @@ function extractPdfText(buffer: Buffer): string {
         }
 
         if (filters.includes('FlateDecode')) {
-          bytes = inflateRaw(bytes)
+          try {
+            bytes = inflateRaw(bytes)
+          } catch {
+            bytes = await inflateAsync(bytes)
+          }
         }
 
         const text = bytes.toString('binary')
@@ -184,7 +190,7 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
     let text = ''
 
     if (fileType === 'pdf') {
-      text = extractPdfText(buffer)
+      text = await extractPdfText(buffer)
     } else if (fileType === 'docx') {
       const mammoth = await import('mammoth')
       const result = await mammoth.extractRawText({ buffer })
