@@ -15,20 +15,26 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
     let text = ''
 
     if (fileType === 'pdf') {
-      const [pdfjs, pdfWorker] = await Promise.all([
-        import('pdfjs-dist/legacy/build/pdf.mjs'),
-        import('pdfjs-dist/legacy/build/pdf.worker.mjs'),
-      ])
-      globalThis.pdfjsWorker = pdfWorker
-      const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer), verbosity: 0 }).promise
-      const pages: string[] = []
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i)
-        const content = await page.getTextContent()
-        pages.push(content.items.map((item: any) => item.str).join(' '))
+      try {
+        const [pdfjs, pdfWorker] = await Promise.all([
+          import('pdfjs-dist/legacy/build/pdf.mjs'),
+          import('pdfjs-dist/legacy/build/pdf.worker.mjs'),
+        ])
+        globalThis.pdfjsWorker = pdfWorker
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer), verbosity: 0 }).promise
+        const pages: string[] = []
+        for (let i = 1; i <= pdf.numPages; i++) {
+          try {
+            const page = await pdf.getPage(i)
+            const content = await page.getTextContent()
+            pages.push(content.items.map((item: any) => item.str).join(' '))
+          } catch { }
+        }
+        await pdf.destroy()
+        text = pages.join('\n\n')
+      } catch {
+        text = buffer.toString('utf-8')
       }
-      await pdf.destroy()
-      text = pages.join('\n\n')
     } else if (fileType === 'docx') {
       const mammoth = await import('mammoth')
       const result = await mammoth.extractRawText({ buffer })
