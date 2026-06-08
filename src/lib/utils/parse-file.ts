@@ -15,10 +15,17 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
     let text = ''
 
     if (fileType === 'pdf') {
-      const { PDFParse } = await import('pdf-parse')
-      const parser = new PDFParse({ data: buffer })
-      const result = await parser.getText()
-      text = result.text
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+      pdfjs.GlobalWorkerOptions.workerSrc = ''
+      const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise
+      const pages: string[] = []
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i)
+        const content = await page.getTextContent()
+        pages.push(content.items.map((item: any) => item.str).join(' '))
+      }
+      await pdf.destroy()
+      text = pages.join('\n\n')
     } else if (fileType === 'docx') {
       const mammoth = await import('mammoth')
       const result = await mammoth.extractRawText({ buffer })
