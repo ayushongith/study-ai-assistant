@@ -30,6 +30,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [flashcardCount, setFlashcardCount] = useState(10)
   const [noteContent, setNoteContent] = useState('')
   const [copied, setCopied] = useState(false)
+  const [pollFailed, setPollFailed] = useState(false)
 
   useEffect(() => {
     if (!user || !id) return
@@ -37,15 +38,25 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
     let attempts = 0
 
     const poll = async () => {
-      const n = await getNoteById(id, supabase)
+      let n: Note | null = null
+      try {
+        n = await getNoteById(id, supabase)
+      } catch {
+        if (cancelled) return
+        if (attempts < 30) { attempts++; setTimeout(poll, 2000) }
+        return
+      }
       if (cancelled) return
       setNote(n)
       setLoading(false)
-      if (n?.content) {
+      if (n?.content && n.content.length > 0) {
         setNoteContent(cleanText(n.content))
+        setPollFailed(false)
       } else if (n?.status === 'processing' && attempts < 30) {
         attempts++
         setTimeout(poll, 2000)
+      } else if (n?.status === 'ready' && (!n?.content || n.content.length === 0)) {
+        setPollFailed(true)
       }
     }
     poll()
@@ -168,6 +179,12 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                   <Clock className="h-8 w-8 mb-2 animate-pulse" />
                   <p className="text-sm">Parsing document...</p>
                   <p className="text-xs mt-1">This may take a few seconds</p>
+                </div>
+              ) : pollFailed ? (
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-muted-foreground">
+                  <FileText className="h-8 w-8 mb-2" />
+                  <p className="text-sm">No content available</p>
+                  <p className="text-xs mt-1 text-destructive">The PDF parser could not extract text from this file.</p>
                 </div>
               ) : !noteContent && note.status === 'error' ? (
                 <div className="flex flex-col items-center justify-center min-h-[400px] text-destructive">
