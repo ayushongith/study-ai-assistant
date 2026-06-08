@@ -9,23 +9,35 @@ const supabase = createClient(
 )
 
 function decodeASCII85(data: string): Buffer {
+  const clean = data.replace(/\s/g, '')
   const chunks: number[] = []
   let i = 0
-  while (i < data.length) {
-    if (data[i] === '~' && data[i + 1] === '>') break
-    if (data[i] === 'z' && data[i + 1] !== undefined) {
+  while (i < clean.length) {
+    if (clean[i] === '~') break
+    if (clean[i] === 'z') {
       chunks.push(0, 0, 0, 0)
       i++
       continue
     }
-    if (data[i] <= ' ') { i++; continue }
-    const chunk = data.slice(i, i + 5)
-    let code = 0
-    for (let j = 0; j < chunk.length; j++) {
-      code = code * 85 + (chunk.charCodeAt(j) - 33)
+    const group = clean.slice(i, i + 5)
+    const n = group.length
+    if (n < 5) {
+      const padded = group + 'u'.repeat(5 - n)
+      let code = 0
+      for (let j = 0; j < 5; j++) code = code * 85 + (padded.charCodeAt(j) - 33)
+      const count = n - 1
+      chunks.push(
+        (code >> 24) & 0xFF,
+        (code >> 16) & 0xFF,
+        ...(count >= 2 ? [(code >> 8) & 0xFF] : []),
+        ...(count >= 3 ? [code & 0xFF] : [])
+      )
+      break
     }
+    let code = 0
+    for (let j = 0; j < 5; j++) code = code * 85 + (group.charCodeAt(j) - 33)
     chunks.push((code >> 24) & 0xFF, (code >> 16) & 0xFF, (code >> 8) & 0xFF, code & 0xFF)
-    i += chunk.length
+    i += 5
   }
   return Buffer.from(chunks)
 }
@@ -34,65 +46,98 @@ function extractPdfText(buffer: Buffer): string {
   const raw = buffer.toString('binary')
   const results: string[] = []
 
-  const streamRegex = /stream\n(.+?)endstream/gs
-  let match: RegExpExecArray | null
+  // Try multiple stream detection patterns
+  const patterns = [
+    /stream\s(.+?)\sendstream/gs,
+    /stream\n(.+?)\nendstream/gs,
+    /stream\r\n(.+?)\r\nendstream/gs,
+  ]
 
-  while ((match = streamRegex.exec(raw)) !== null) {
-    let streamData = match[1].trim()
-    if (streamData.endsWith('>')) {
-      streamData = streamData.replace(/~>.*/, '~>')
-    }
+  for (const streamRegex of patterns) {
+    let match: RegExpExecArray | null
+    streamRegex.lastIndex = 0
+    while ((match = streamRegex.exec(raw)) !== null) {
+      let streamData = match[1].replace(/\r\n/g, '\n').replace(/\n$/, '')
 
-    const filterMatch = raw.slice(0, match.index).match(/\/Filter\s*\[([^\]]+)\]/)
-    const filters: string[] = []
-    if (filterMatch) {
-      const names = filterMatch[1]
-      const nameRegex = /\/(\w+)/g
-      let nm: RegExpExecArray | null
-      while ((nm = nameRegex.exec(names)) !== null) {
-        filters.push(nm[1])
-      }
-    }
-
-    let decoded: Buffer
-    try {
-      let bytes = Buffer.from(streamData, 'binary')
-
-      if (filters.includes('ASCII85Decode')) {
-        const ascii85 = streamData.replace(/~>.*/, '')
-        bytes = decodeASCII85(ascii85)
-      }
-
-      if (filters.includes('FlateDecode')) {
-        bytes = inflateRaw(bytes)
-      }
-
-      const text = bytes.toString('binary')
-
-      const parens: string[] = []
-      let j = 0
-      const chars = text.split('')
-      while (j < chars.length) {
-        if (chars[j] === '(') {
-          let depth = 1
-          let k = j + 1
-          while (k < chars.length && depth > 0) {
-            if (chars[k] === '\\') { k += 2; continue }
-            if (chars[k] === '(') depth++
-            else if (chars[k] === ')') depth--
-            k++
-          }
-          const t = chars.slice(j + 1, k - 1).join('')
-            .replace(/\\(.)/g, '$1')
-            .replace(/\\n/g, '\n')
-          if (t.trim()) parens.push(t)
-          j = k
-        } else {
-          j++
+      // Find filters preceding this stream
+      const before = raw.slice(Math.max(0, match.index - 500), match.index)
+      const filterMatch = before.match(/\/Filter\s*(\[.*?\]|\/\w+)/)
+      const filters: string[] = []
+      if (filterMatch) {
+        const f = filterMatch[1]
+        if (f.startsWith('[')) {
+          const names = f.match(/\/(\w+)/g) || []
+          filters.push(...names.map(n => n.slice(1)))
+        } else if (f.startsWith('/')) {
+          filters.push(f.slice(1))
         }
       }
-      if (parens.length) results.push(parens.join(' '))
-    } catch { }
+
+      try {
+        let bytes = Buffer.from(streamData, 'binary')
+
+        if (filters.includes('ASCII85Decode')) {
+          bytes = decodeASCII85(streamData)
+        }
+
+        if (filters.includes('FlateDecode')) {
+          bytes = inflateRaw(bytes)
+        }
+
+        const text = bytes.toString('binary')
+
+        const parens: string[] = []
+        let j = 0
+        while (j < text.length) {
+          if (text[j] === '(') {
+            let depth = 1
+            let k = j + 1
+            while (k < text.length && depth > 0) {
+              if (text[k] === '\\') { k += 2; continue }
+              if (text[k] === '(') depth++
+              else if (text[k] === ')') depth--
+              k++
+            }
+            const t = text.slice(j + 1, k - 1)
+              .replace(/\\(.)/g, '$1')
+              .replace(/\\n/g, '\n')
+            if (t.trim()) parens.push(t.trim())
+            j = k
+          } else {
+            j++
+          }
+        }
+
+        if (parens.length) results.push(parens.join(' '))
+      } catch { }
+    }
+    if (results.length) break
+  }
+
+  // Fallback: extract text between parentheses directly from raw binary
+  if (!results.length) {
+    const parens: string[] = []
+    let i = 0
+    while (i < raw.length) {
+      if (raw[i] === '(') {
+        let depth = 1
+        let j = i + 1
+        while (j < raw.length && depth > 0) {
+          if (raw[j] === '\\') { j += 2; continue }
+          if (raw[j] === '(') depth++
+          else if (raw[j] === ')') depth--
+          j++
+        }
+        const t = raw.slice(i + 1, j - 1)
+          .replace(/\\(.)/g, '$1')
+          .replace(/\\n/g, '\n')
+        if (t.trim() && t.length < 500) parens.push(t.trim())
+        i = j
+      } else {
+        i++
+      }
+    }
+    if (parens.length) results.push(parens.join('\n\n'))
   }
 
   return results.join('\n\n')
