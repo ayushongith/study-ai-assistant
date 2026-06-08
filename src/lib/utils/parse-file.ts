@@ -15,9 +15,10 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
     let text = ''
 
     if (fileType === 'pdf') {
-      const pdfParse = (await import('pdf-parse')).default
-      const pdfData = await pdfParse(buffer)
-      text = pdfData.text
+      const { PDFParse } = await import('pdf-parse')
+      const parser = new PDFParse({ data: buffer })
+      const result = await parser.getText()
+      text = result.text
     } else if (fileType === 'docx') {
       const mammoth = await import('mammoth')
       const result = await mammoth.extractRawText({ buffer })

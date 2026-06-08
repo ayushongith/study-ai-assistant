@@ -1,6 +1,8 @@
 export function isApiKeyValid(key: string | undefined): boolean {
   if (!key || key === 'placeholder-gemini-key') return false
-  return key.startsWith('AIza') && key.length > 20
+  if (key.startsWith('AIza')) return key.length > 20
+  if (key.startsWith('AQ.')) return key.length > 20
+  return false
 }
 
 async function tryGemini<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
