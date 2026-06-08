@@ -38,8 +38,11 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
     }
 
     const cleaned = text
-      .replace(/\s+/g, ' ')
+      .replace(/\r\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/^\s*$/gm, '')
+      .split('\n').filter(l => l.trim()).join('\n')
       .trim()
 
     const { error } = await supabase
