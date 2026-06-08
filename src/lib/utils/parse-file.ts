@@ -51,6 +51,7 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
     return { success: true, content: cleaned }
   } catch (err: any) {
     console.error('Parse error:', err)
+    await supabase.from('notes').update({ status: 'error' }).eq('id', noteId)
     return { success: false, error: err.message }
   }
 }

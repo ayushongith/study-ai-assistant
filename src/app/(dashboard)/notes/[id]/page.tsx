@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  Sparkles, Brain, BookOpen, Copy, Check, Loader2, ArrowLeft, FileText
+  Sparkles, Brain, BookOpen, Copy, Check, Loader2, ArrowLeft, FileText, Clock
 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -33,12 +33,24 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     if (!user || !id) return
-    getNoteById(id, supabase).then(n => {
+    let cancelled = false
+    let attempts = 0
+
+    const poll = async () => {
+      const n = await getNoteById(id, supabase)
+      if (cancelled) return
       setNote(n)
       setLoading(false)
-      if (n?.content) setNoteContent(cleanText(n.content))
-    })
-    getSummaries(id, supabase).then(setSummaries)
+      if (n?.content) {
+        setNoteContent(cleanText(n.content))
+      } else if (n?.status === 'processing' && attempts < 30) {
+        attempts++
+        setTimeout(poll, 2000)
+      }
+    }
+    poll()
+    getSummaries(id, supabase).then(s => { if (!cancelled) setSummaries(s) })
+    return () => { cancelled = true }
   }, [id, user, supabase])
 
   const handleGenerateSummary = async () => {
@@ -151,11 +163,28 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               <CardTitle className="text-sm font-medium">Document Content</CardTitle>
             </CardHeader>
             <CardContent>
-              <Textarea
-                value={noteContent}
-                onChange={e => setNoteContent(e.target.value)}
-                className="min-h-[400px] font-mono text-sm"
+              {note.status === 'processing' && !noteContent ? (
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-muted-foreground">
+                  <Clock className="h-8 w-8 mb-2 animate-pulse" />
+                  <p className="text-sm">Parsing document...</p>
+                  <p className="text-xs mt-1">This may take a few seconds</p>
+                </div>
+              ) : !noteContent && note.status === 'error' ? (
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-destructive">
+                  <p className="text-sm">Failed to parse document</p>
+                </div>
+              ) : !noteContent ? (
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-muted-foreground">
+                  <FileText className="h-8 w-8 mb-2" />
+                  <p className="text-sm">No content available</p>
+                </div>
+              ) : (
+                <Textarea
+                  value={noteContent}
+                  onChange={e => setNoteContent(e.target.value)}
+                  className="min-h-[400px] font-mono text-sm"
               />
+              )}
             </CardContent>
           </Card>
         </div>
