@@ -11,7 +11,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  MessageSquare, Send, Plus, Trash2, Loader2, Bot, User, Pin
+  Send, Plus, Trash2, Loader2, Bot, User, Pin
 } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -30,10 +30,6 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false)
   const [streamingText, setStreamingText] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
-  const abortRef = useRef<AbortController | null>(null)
-
-  useEffect(() => { if (!user) return; loadSessions() }, [user])
-  useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, streamingText])
 
   const loadSessions = async () => {
     if (!user) return
@@ -45,10 +41,13 @@ export default function ChatPage() {
     }
   }
 
+  useEffect(() => { if (!user) return; loadSessions() }, [user, loadSessions])
+  useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, streamingText])
+
   useEffect(() => {
     if (!activeSession) return
     getChatMessages(activeSession, supabase).then(setMessages)
-  }, [activeSession])
+  }, [activeSession, supabase])
 
   const newSession = async () => {
     if (!user) return
@@ -91,7 +90,7 @@ export default function ChatPage() {
     setInput('')
 
     try {
-      const { context, sources } = await getRelevantContext(q)
+      const { context, sources } = await getRelevantContext(q, undefined, supabase)
       let fullResponse = ''
 
       await generateStreamingResponse(q, context, (chunk) => {

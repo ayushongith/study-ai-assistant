@@ -4,12 +4,11 @@ import { useEffect, useState, use } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { getNoteById, getSummaries } from '@/lib/db/queries'
 import { generateSummary, generateQuiz, generateFlashcards } from '@/lib/ai/gemini'
-import { cleanText, extractKeywords, countTokens } from '@/lib/utils/file-parser'
+import { cleanText, countTokens } from '@/lib/utils/file-parser'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -34,24 +33,13 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     if (!user || !id) return
-    Promise.all([
-      getNoteById(id, supabase),
-      getSummaries(id, supabase),
-    ]).then(([n, s]) => {
+    getNoteById(id, supabase).then(n => {
       setNote(n)
-      setSummaries(s)
       setLoading(false)
-      if (n) fetchNoteContent(n)
+      if (n?.content) setNoteContent(cleanText(n.content))
     })
-  }, [id, user])
-
-  const fetchNoteContent = async (n: Note) => {
-    try {
-      const response = await fetch(n.file_url)
-      const text = await response.text()
-      setNoteContent(cleanText(text))
-    } catch { }
-  }
+    getSummaries(id, supabase).then(setSummaries)
+  }, [id, user, supabase])
 
   const handleGenerateSummary = async () => {
     if (!note || !user) return
@@ -66,7 +54,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         content,
       })
       if (error) throw error
-      const updated = await getSummaries(note.id)
+      const updated = await getSummaries(note.id, supabase)
       setSummaries(updated)
       toast.success('Summary generated!')
     } catch (err: any) {

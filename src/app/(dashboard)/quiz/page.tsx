@@ -29,7 +29,7 @@ export default function QuizPage() {
     supabase.from('quizzes').select('*').eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => { setQuizzes(data || []); setLoading(false) })
-  }, [user])
+  }, [user, supabase])
 
   const startQuiz = async (quiz: any) => {
     const { data: questions } = await supabase

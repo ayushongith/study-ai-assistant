@@ -9,9 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Switch } from '@/components/ui/switch'
-import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Loader2, User, Lock, Moon, Sun, Trash2, Download } from 'lucide-react'
+import { Loader2, User, Lock, Moon, Sun, Trash2 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 

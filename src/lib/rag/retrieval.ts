@@ -1,12 +1,19 @@
-import { supabase } from '@/lib/db/supabase'
+import { supabase as anonClient } from '@/lib/db/supabase'
 import { config } from '@/lib/config'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+function getDb(client?: SupabaseClient) {
+  return client || anonClient
+}
 
 export async function searchSimilarChunks(
   query: string,
   noteId?: string,
-  limit = config.rag.maxChunks
+  limit = config.rag.maxChunks,
+  client?: SupabaseClient
 ) {
-  let queryBuilder = supabase
+  const db = getDb(client)
+  let queryBuilder = db
     .from('note_chunks')
     .select('id, note_id, content')
     .limit(limit)
@@ -39,9 +46,10 @@ export async function searchSimilarChunks(
 
 export async function getRelevantContext(
   query: string,
-  noteId?: string
+  noteId?: string,
+  client?: SupabaseClient
 ): Promise<{ context: string; sources: string[] }> {
-  const chunks = await searchSimilarChunks(query, noteId)
+  const chunks = await searchSimilarChunks(query, noteId, undefined, client)
   const context = chunks.map(c => c.content).join('\n\n')
   const sources = chunks.map(c => c.id)
   return { context, sources }
@@ -49,11 +57,13 @@ export async function getRelevantContext(
 
 export async function hybridSearch(
   query: string,
-  userId: string
+  userId: string,
+  client?: SupabaseClient
 ) {
-  const semanticResults = await searchSimilarChunks(query)
+  const db = getDb(client)
+  const semanticResults = await searchSimilarChunks(query, undefined, undefined, client)
 
-  const { data: keywordResults } = await supabase
+  const { data: keywordResults } = await db
     .from('note_chunks')
     .select('*, notes!inner(user_id)')
     .eq('notes.user_id', userId)

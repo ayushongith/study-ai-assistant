@@ -14,6 +14,9 @@ import {
 import { toast } from 'sonner'
 import Link from 'next/link'
 import type { Note } from '@/types'
+import { parseDocument } from '@/lib/utils/parse-file'
+
+export const dynamic = 'force-dynamic'
 
 export default function NotesPage() {
   const { user, supabase } = useAuth()
@@ -54,17 +57,24 @@ export default function NotesPage() {
         .from('notes')
         .getPublicUrl(filePath)
 
-      const { error: dbError } = await supabase.from('notes').insert({
+      const { data: note, error: dbError } = await supabase.from('notes').insert({
         user_id: user.id,
         title: file.name.replace(/\.[^/.]+$/, ''),
         file_url: publicUrl,
         file_type: fileExt,
         file_size: file.size,
-        status: 'ready',
+        status: 'processing',
         content: '',
-      })
+      }).select().single()
 
       if (dbError) throw dbError
+
+      if (note) {
+        parseDocument(note.id, publicUrl, fileExt)
+          .then(res => {
+            if (!res.success) console.error('Parse failed:', res.error)
+          })
+      }
 
       toast.success('File uploaded successfully!')
       setTimeout(loadNotes, 500)
