@@ -16,9 +16,9 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
     let content = ''
 
     if (fileType === 'pdf') {
-      // Use pdfjs-dist legacy build (Node.js compatible)
-      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
-      const doc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise
+      const pdfjs = await import('pdfjs-dist')
+      const task = pdfjs.getDocument({ data: new Uint8Array(buffer) })
+      const doc = await task.promise
       const pages: string[] = []
       for (let i = 1; i <= doc.numPages; i++) {
         const page = await doc.getPage(i)
@@ -26,6 +26,7 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
         const pageText = textContent.items.map((item: any) => item.str).join(' ')
         if (pageText.trim()) pages.push(pageText.trim())
       }
+      await doc.destroy()
       content = pages.join('\n\n')
     } else if (fileType === 'docx') {
       const mammoth = await import('mammoth')
