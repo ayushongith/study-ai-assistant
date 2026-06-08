@@ -15,8 +15,11 @@ export async function parseDocument(noteId: string, fileUrl: string, fileType: s
     let text = ''
 
     if (fileType === 'pdf') {
-      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
-      pdfjs.GlobalWorkerOptions.workerSrc = ''
+      const [pdfjs, pdfWorker] = await Promise.all([
+        import('pdfjs-dist/legacy/build/pdf.mjs'),
+        import('pdfjs-dist/legacy/build/pdf.worker.mjs'),
+      ])
+      globalThis.pdfjsWorker = pdfWorker
       const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise
       const pages: string[] = []
       for (let i = 1; i <= pdf.numPages; i++) {
